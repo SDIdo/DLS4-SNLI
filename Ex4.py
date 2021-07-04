@@ -60,19 +60,13 @@ class NLIModel(nn.Module):
         x1_emb = self.E(x1)
         x2_emb = self.E(x2)
 
-        #x1_packed = pack_padded_sequence(x1_emb, x1_l, batch_first=True, enforce_sorted=False)
-        #x2_packed = pack_padded_sequence(x2_emb, x2_l, batch_first=True, enforce_sorted=False)
+        x1_packed = pack_padded_sequence(x1_emb, x1_l, batch_first=True, enforce_sorted=False)
+        x2_packed = pack_padded_sequence(x2_emb, x2_l, batch_first=True, enforce_sorted=False)
 
-        packed_pinputs, r_index = pack_for_rnn_seq(x1_emb, x1_l)
+        output_x1, (hn, cn) = self.lstm(x1_packed.float())
+        output_x2, (hn, cn) = self.lstm(x2_packed.float())
 
-        output, (hn, cn) = self.lstm(packed_pinputs.float())
-
-        output_x1  = unpack_from_rnn_seq(output, r_index)
-
-        output_x1, (hn, cn) = self.lstm(x2_emb.float())
-        output_x2, (hn, cn) = self.lstm(x2_emb.float())
-
-        output_x1_unpacked, _ = unpack_from_rnn_seq(output_x1, batch_first=True)
+        output_x1_unpacked, _ = pad_packed_sequence(output_x1, batch_first=True)
         output_x2_unpacked, _ = pad_packed_sequence(output_x2, batch_first=True)
 
         # Length truncate
