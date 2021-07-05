@@ -72,8 +72,8 @@ class NLIModel(nn.Module):
         # Length truncate
         len1 = output_x1_unpacked.size(1)
         len2 = output_x2_unpacked.size(1)
-        x1_emb = x1_emb[:len1, :, :]  # [T, B, D]
-        x2_emb = x2_emb[:len2, :, :]  # [T, B, D]
+        x1_emb = x1_emb[:, :len1, :]  # [T, B, D]
+        x2_emb = x2_emb[:, :len2, :]  # [T, B, D]
 
         # Using residual connection
         s1_layer2_in = torch.cat([x1_emb, output_x1_unpacked], dim=2)
