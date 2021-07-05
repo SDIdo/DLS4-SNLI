@@ -13,6 +13,7 @@ TEST_PATH = "data/snli_1.0_test.jsonl"
 DEV_PATH = "data/snli_1.0_dev.jsonl"
 GLOVE_PATH = "data/glove.840B.300d.txt"
 UNKNOWN = "UNKNOWN"
+PAD = "PAD"
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 EMBEDDING_DIM = 300
 
@@ -60,6 +61,9 @@ class NLIModel(nn.Module):
         x1_emb = self.E(x1)
         x2_emb = self.E(x2)
 
+        x1_l = x1_l.tolist()
+        x2_l = x2_l.tolist()
+
         x1_packed = pack_padded_sequence(x1_emb, x1_l, batch_first=True, enforce_sorted=False)
         x2_packed = pack_padded_sequence(x2_emb, x2_l, batch_first=True, enforce_sorted=False)
 
@@ -69,58 +73,41 @@ class NLIModel(nn.Module):
         output_x1_unpacked, _ = pad_packed_sequence(output_x1, batch_first=True)
         output_x2_unpacked, _ = pad_packed_sequence(output_x2, batch_first=True)
 
+        mat1 = np.zeros((3, 78 - output_x1_unpacked.shape[1], 1024))
+        mat2 = np.zeros((3, 58 - output_x2_unpacked.shape[1], 1024))
+
+        mat1 = torch.tensor(mat1).to(DEVICE)
+        mat2 = torch.tensor(mat2).to(DEVICE)
+
+        output_x1_unpacked = torch.cat([output_x1_unpacked, mat1], dim=1)
+        output_x2_unpacked = torch.cat([output_x2_unpacked, mat2], dim=1)
+
         # Length truncate
-        len1 = output_x1_unpacked.size(1)
-        len2 = output_x2_unpacked.size(1)
-        x1_emb = x1_emb[:, :len1, :]  # [T, B, D]
-        x2_emb = x2_emb[:, :len2, :]  # [T, B, D]
+        #len1 = output_x1_unpacked.size(1)
+        #len2 = output_x2_unpacked.size(1)
+        #x1_emb = x1_emb[:, :len1, :]  # [T, B, D]
+        #x2_emb = x2_emb[:, :len2, :]  # [T, B, D]
 
         # Using residual connection
-        s1_layer2_in = torch.cat([x1_emb, output_x1_unpacked], dim=2)
-        s2_layer2_in = torch.cat([x2_emb, output_x2_unpacked], dim=2)
+        x1_emb = torch.cat([x1_emb, output_x1_unpacked], dim=2)
+        x2_emb = torch.cat([x2_emb, output_x2_unpacked], dim=2)
+
+        x1_packed = pack_padded_sequence(x1_emb, x1_l, batch_first=True, enforce_sorted=False)
+        x2_packed = pack_padded_sequence(x2_emb, x2_l, batch_first=True, enforce_sorted=False)
+
+        output_x1, (hn, cn) = self.lstm_1(x1_packed.float())
+        output_x2, (hn, cn) = self.lstm_1(x2_packed.float())
+
+        output_x1_unpacked, _ = pad_packed_sequence(output_x1, batch_first=True)
+        output_x2_unpacked, _ = pad_packed_sequence(output_x2, batch_first=True)
+
+        #s1_layer3_in = torch.cat([x1_emb, output_x1_unpacked, s1_layer2_out], dim=2)
+        #s2_layer3_in = torch.cat([x2_emb, output_x2_unpacked, s2_layer2_out], dim=2)
 
         return x1_emb
 
 
 
-
-
-def pack_for_rnn_seq(inputs, lengths):
-    """
-    :param inputs: [T * B * D]
-    :param lengths:  [B]
-    :return:
-    """
-    _, sorted_indices = lengths.sort()
-    '''
-        Reverse to decreasing order
-    '''
-    r_index = reversed(list(sorted_indices))
-
-    s_inputs_list = []
-    lengths_list = []
-    reverse_indices = np.zeros(lengths.size(0), dtype=np.int64)
-
-    for j, i in enumerate(r_index):
-        s_inputs_list.append(inputs[:, i, :].unsqueeze(1))
-        lengths_list.append(lengths[i])
-        reverse_indices[i] = j
-
-    reverse_indices = list(reverse_indices)
-
-    s_inputs = torch.cat(s_inputs_list, 1)
-    packed_seq = pack_padded_sequence(s_inputs, lengths_list)
-
-    return packed_seq, reverse_indices
-
-
-def unpack_from_rnn_seq(packed_seq, reverse_indices):
-    unpacked_seq, _ = pad_packed_sequence(packed_seq)
-    s_inputs_list = []
-
-    for i in reverse_indices:
-        s_inputs_list.append(unpacked_seq[:, i, :].unsqueeze(1))
-    return torch.cat(s_inputs_list, 1)
 
 
 def parse_data(file):
@@ -146,11 +133,18 @@ def create_dict():
     words_to_vecs = {}
     vecs = []
     index = 0
+    indexed_words[PAD] = index
+    index += 1
+    break1 = 0
     for line in f.readlines():
-        splitLines = line.split(" ")
-        indexed_words[splitLines[0]] = index
-        words_to_vecs[splitLines[0]] = np.asarray(splitLines[1:], dtype='float32')
-        index += 1
+        if break1 < 1000:
+            splitLines = line.split(" ")
+            indexed_words[splitLines[0]] = index
+            words_to_vecs[splitLines[0]] = np.asarray(splitLines[1:], dtype='float32')
+            index += 1
+            break1 += 1
+        else:
+            break
     f.close()
     indexed_words[UNKNOWN] = index
 
@@ -203,7 +197,7 @@ def main():
     indexed_labels = {"-": -1, "entailment": 0, "neutral": 1, "contradiction": 2}
     train_premises, train_labels, train_hypotheses = parse_data(TRAIN_PATH)
     train_dataset = create_dataset(train_premises, train_labels, train_hypotheses, indexed_words, indexed_labels)
-    train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=3, shuffle=True)
     lr = 0.0002
 
 
@@ -217,9 +211,9 @@ def main():
 
         for i, data in enumerate(train_dataloader, 0):
             premise, premise_length, hypothesis, hypothesis_length, label = data
-            premise = torch.cat(premise).reshape(32, -1)
+            premise = torch.cat(premise).reshape(3, -1)
             premise = premise.to(DEVICE)
-            hypothesis = torch.cat(hypothesis).reshape(32, -1)
+            hypothesis = torch.cat(hypothesis).reshape(3, -1)
             hypothesis = hypothesis.to(DEVICE)
             premise_length = premise_length.int()
             hypothesis_length = hypothesis_length.int()
