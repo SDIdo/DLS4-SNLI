@@ -2,3 +2,53 @@ Deep Learning for Texts and Sequences
 Assignment 4 - NLI Implementation
 
 ########################
+
+Train Part:
+
+Run: python3 train_model.py train_path dev_path gloves_path validate_per_batches
+
+Explanation:
+		train_path is the path of the training dataset file
+		dev_path is the path of the devset file
+		gloves_path is the path for the gloves vectors (for best performance use glove.840B.300d)
+		validate_per_batches per how many batches would you like to validate the model 
+		
+		NOTE: snli data of proper .txt files are required to be placed locally, same about gloves. 
+
+Relevant Files:
+train_model.py
+
+Prints: Every 'validate_per_batches' batches will print performance on dev in current epoch
+
+Outputs:
+        In addition to that - saves a trained model ready to be used for prediction
+        named: dev_acc_<value>_model
+        Note: Non architecture portable!
+        Saved in CPU can be used in CPU, saved in CUDA will serve in CUDA
+	Note: If you Save model in torch 1.7.1 environment it cannot be used in torch 1.8.
+
+Graphs: produces train dev loss and accuracy graphs
+
+##########################################################
+
+Part Predict:
+
+Run: python3 test_model.py test_path model_path indexed_words_path
+
+Explanation:
+    
+	test_path is the path of the test dataset file
+	saved_model_path is the path of the trained model file
+	indexed_words_path is a dictionary containing indexed words (was saved automatically in train stage)
+
+
+Relevant Files:
+test_model.py
+train_model.py (or models.py if had time to better order things)
+
+Prints: None
+
+Outputs: Predictions about input test file.
+         The file will be called test.pred
+
+###############################################################
