@@ -92,6 +92,8 @@ def pred_routin(args):
     model = NLIModel(vecs=vecs) # TODO trying to save the cost of loading actual vecs from json.. hoping in the load_state
     model.load_state_dict(torch.load(args.model_path))
     model.eval()
+    if DEVICE == 'cuda':
+        model.cuda(DEVICE)
 
     print('Testing model...')
     indexed_labels = {'-': -1, "entailment": 0, "neutral": 1, "contradiction": 2}
