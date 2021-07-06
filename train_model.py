@@ -290,8 +290,8 @@ def main():
                 valid_loss_sum = valid_accracy_sum = 0
                 for valid_batch in dev_dataloader:
                     valid_loss, valid_accuracy = iterate(lr=lr, model=model, batch=valid_batch, hyparams=hyparams, is_training=False)
-                    valid_loss_sum += valid_loss.data[0]  # Not sure here...
-                    valid_accracy_sum += valid_accuracy.data[0]
+                    valid_loss_sum += valid_loss.item()  # Not sure here...
+                    valid_accracy_sum += valid_accuracy.item()
                 dev_loss = valid_loss_sum / num_valid_batches
                 dev_accuracy = valid_accracy_sum / num_valid_batches
                 print("valid_accuracy is " + str(dev_accuracy))
