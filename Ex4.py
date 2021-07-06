@@ -64,6 +64,7 @@ class NLIModel(nn.Module):
         x1_l = x1_l.tolist()
         x2_l = x2_l.tolist()
 
+        # 1
         x1_packed = pack_padded_sequence(x1_emb, x1_l, batch_first=True, enforce_sorted=False)
         x2_packed = pack_padded_sequence(x2_emb, x2_l, batch_first=True, enforce_sorted=False)
 
@@ -82,16 +83,12 @@ class NLIModel(nn.Module):
         output_x1_unpacked = torch.cat([output_x1_unpacked, mat1], dim=1)
         output_x2_unpacked = torch.cat([output_x2_unpacked, mat2], dim=1)
 
-        # Length truncate
-        #len1 = output_x1_unpacked.size(1)
-        #len2 = output_x2_unpacked.size(1)
-        #x1_emb = x1_emb[:, :len1, :]  # [T, B, D]
-        #x2_emb = x2_emb[:, :len2, :]  # [T, B, D]
 
         # Using residual connection
         x1_emb = torch.cat([x1_emb, output_x1_unpacked], dim=2)
         x2_emb = torch.cat([x2_emb, output_x2_unpacked], dim=2)
 
+        # 2
         x1_packed = pack_padded_sequence(x1_emb, x1_l, batch_first=True, enforce_sorted=False)
         x2_packed = pack_padded_sequence(x2_emb, x2_l, batch_first=True, enforce_sorted=False)
 
@@ -101,9 +98,41 @@ class NLIModel(nn.Module):
         output_x1_unpacked, _ = pad_packed_sequence(output_x1, batch_first=True)
         output_x2_unpacked, _ = pad_packed_sequence(output_x2, batch_first=True)
 
-        #s1_layer3_in = torch.cat([x1_emb, output_x1_unpacked, s1_layer2_out], dim=2)
-        #s2_layer3_in = torch.cat([x2_emb, output_x2_unpacked, s2_layer2_out], dim=2)
+        mat1 = np.zeros((3, 78 - output_x1_unpacked.shape[1], 2048))
+        mat2 = np.zeros((3, 58 - output_x2_unpacked.shape[1], 2048))
 
+        mat1 = torch.tensor(mat1).to(DEVICE)
+        mat2 = torch.tensor(mat2).to(DEVICE)
+
+        output_x1_unpacked = torch.cat([output_x1_unpacked, mat1], dim=1)
+        output_x2_unpacked = torch.cat([output_x2_unpacked, mat2], dim=1)
+
+        x1_emb = torch.cat([x1_emb, output_x1_unpacked], dim=2)
+        x2_emb = torch.cat([x2_emb, output_x2_unpacked], dim=2)
+
+        # 3
+        x1_packed = pack_padded_sequence(x1_emb, x1_l, batch_first=True, enforce_sorted=False)
+        x2_packed = pack_padded_sequence(x2_emb, x2_l, batch_first=True, enforce_sorted=False)
+
+        output_x1, (hn, cn) = self.lstm_2(x1_packed.float())
+        output_x2, (hn, cn) = self.lstm_2(x2_packed.float())
+
+        output_x1_unpacked, _ = pad_packed_sequence(output_x1, batch_first=True)
+        output_x2_unpacked, _ = pad_packed_sequence(output_x2, batch_first=True)
+
+        mat1 = np.zeros((3, 78 - output_x1_unpacked.shape[1], 4096))
+        mat2 = np.zeros((3, 58 - output_x2_unpacked.shape[1], 4096))
+
+        mat1 = torch.tensor(mat1).to(DEVICE)
+        mat2 = torch.tensor(mat2).to(DEVICE)
+
+        x1 = torch.cat([output_x1_unpacked, mat1], dim=1)
+        x2 = torch.cat([output_x2_unpacked, mat2], dim=1)
+
+        x1 = torch.max(x1, dim=1)
+        x2 = torch.max(x2, dim=1)
+
+        sentence_vector = torch.cat([x1, x2, x1 - x2, x1 * x2], dim=0)
         return x1_emb
 
 
