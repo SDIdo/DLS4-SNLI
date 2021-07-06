@@ -129,11 +129,13 @@ class NLIModel(nn.Module):
         x1 = torch.cat([output_x1_unpacked, mat1], dim=1)
         x2 = torch.cat([output_x2_unpacked, mat2], dim=1)
 
-        x1 = torch.max(x1, dim=1)
-        x2 = torch.max(x2, dim=1)
+        x1 = torch.max(x1, 1)[0]
+        x2 = torch.max(x2, 1)[0]
 
-        sentence_vector = torch.cat([x1, x2, x1 - x2, x1 * x2], dim=0)
-        return x1_emb
+        sentence_vector = torch.cat([x1, x2, x1 - x2, x1 * x2], dim=1)
+        out = self.classifier(sentence_vector.float())
+        
+        return out
 
 
 
