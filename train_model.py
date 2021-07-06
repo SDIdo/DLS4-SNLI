@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 UNKNOWN = "UNKNOWN"
 PAD = "PAD"
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-EMBEDDING_DIM = 50 # 300
+EMBEDDING_DIM = 300 # 300
 
 
 class NLIModel(nn.Module):
@@ -183,7 +183,7 @@ def create_dataset(premises, labels, hypotheses, indexed_words, indexed_labels):
 class Args():
     def __init__(self, train_path="data/snli_1.0_train.jsonl",
                  dev_path="data/snli_1.0_dev.jsonl",
-                 gloves_path="data/glove.6B.50d.txt", # data/glove.840B.300d.txt
+                 gloves_path="data/glove.840B.300d.txt", # data/glove.840B.300d.txt
                  val_per_sents=100):
         self.train_path = train_path
         self.dev_path = dev_path
@@ -298,9 +298,9 @@ def main():
                 dev_acc_lst.append(dev_accuracy)
                 dev_loss_lst.append(dev_loss)
     # done epochs save the model
-    model_filename = f'dev_acc_{round(dev_acc_lst[-1], 2)}_model'
+    model_filename = f'train_acc_{round(train_acc_lst[-1].item(), 2)}_model'
     torch.save(model.state_dict(), model_filename)
-    epochs = [i for i in range(hyparams.epochs)]
+    epochs = [i for i in range(hyparams.epochs*batch_size)]
     export_epochs_train_dev_something_graph(epochs, train_loss_lst, dev_loss_lst, 'loss', 'Model_train_dev_loss_graph')
     export_epochs_train_dev_something_graph(epochs, train_acc_lst, dev_acc_lst, 'accuracy', 'Model_train_dev_accuracy_graph')
 
