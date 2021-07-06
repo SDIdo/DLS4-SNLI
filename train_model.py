@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 UNKNOWN = "UNKNOWN"
 PAD = "PAD"
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-EMBEDDING_DIM = 50 # 300
+EMBEDDING_DIM = 300 # 300
 
 
 class NLIModel(nn.Module):
@@ -183,7 +183,7 @@ def create_dataset(premises, labels, hypotheses, indexed_words, indexed_labels):
 class Args():
     def __init__(self, train_path="data/snli_1.0_train.jsonl",
                  dev_path="data/snli_1.0_dev.jsonl",
-                 gloves_path="data/glove.6B.50d.txt", # data/glove.840B.300d.txt
+                 gloves_path="data/glove.840B.300d.txt", # data/glove.840B.300d.txt
                  val_per_sents=100):
         self.train_path = train_path
         self.dev_path = dev_path
