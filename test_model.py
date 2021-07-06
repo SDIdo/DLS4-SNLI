@@ -12,7 +12,7 @@ STUDENTS={'name1': 'Ido Natan',
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 NUM_WORDS = 400002
-DIMENSIONS = 50
+DIMENSIONS = 300
 UNKNOWN = "UNKNOWN"
 
 class TestArgs():
