@@ -184,7 +184,7 @@ class Args():
     def __init__(self, train_path="data/snli_1.0_train.jsonl",
                  dev_path="data/snli_1.0_dev.jsonl",
                  gloves_path="data/glove.840B.300d.txt", # data/glove.840B.300d.txt
-                 val_per_sents=100):
+                 val_per_sents=5):
         self.train_path = train_path
         self.dev_path = dev_path
         self.gloves_path = gloves_path
