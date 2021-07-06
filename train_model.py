@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 UNKNOWN = "UNKNOWN"
 PAD = "PAD"
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-EMBEDDING_DIM = 300 # 300
+EMBEDDING_DIM = 50 # 300
 
 
 class NLIModel(nn.Module):
@@ -183,7 +183,7 @@ def create_dataset(premises, labels, hypotheses, indexed_words, indexed_labels):
 class Args():
     def __init__(self, train_path="data/snli_1.0_train.jsonl",
                  dev_path="data/snli_1.0_dev.jsonl",
-                 gloves_path="data/glove.840B.300d.txt", # data/glove.840B.300d.txt
+                 gloves_path="data/glove.6B.50d.txt", # data/glove.840B.300d.txt
                  val_per_sents=100):
         self.train_path = train_path
         self.dev_path = dev_path
@@ -219,16 +219,17 @@ def iterate(lr, model, batch, hyparams, is_training=True):
         optimizer.step()
     return loss, accuracy
 
-def export_epochs_train_dev_something_graph(epochs, train_something, dev_something, something, fig_name):
+def export_loss_accuracy_graph(loss, accuracy, subject, fig_name):
     TRAIN_COLOR = 'green'
     DEV_COLOR = 'orange'
-    label_1 = f'train_{something}'
-    label_2 = f'dev_{something}'
+    label_1 = f'{subject}_loss'
+    label_2 = f'{subject}_accuracy'
+    iterations = [i for i in range(len(loss))]
     plt.title(fig_name)
-    plt.plot(epochs, train_something, TRAIN_COLOR, label=label_1)
-    plt.plot(epochs, dev_something, DEV_COLOR, label=label_2)
+    plt.plot(iterations, loss, TRAIN_COLOR, label=label_1)
+    plt.plot(iterations, accuracy, DEV_COLOR, label=label_2)
     plt.xlabel('Epochs')
-    plt.ylabel(f'{something}')
+    plt.ylabel('Percents')
     plt.legend([label_1, label_2], loc="lower right")
     plt.savefig(f'{fig_name}.jpg')
     plt.clf()
@@ -249,7 +250,7 @@ def main():
     else:
         args=Args()
     hyparams = HyperParameters(lr=0.0002, optimizer='Adam', loss_function='Cross_Entropy'
-                               ,epochs=4, batch_size=32)
+                               ,epochs=10, batch_size=32)
     batch_size = hyparams.batch_size
     indexed_words, vecs = create_dict(args.gloves_path)
 
@@ -279,10 +280,10 @@ def main():
         lr = lr * 0.5 if epoch % 2 == 0 else lr
         for i, data in enumerate(train_dataloader, 0):
             train_loss, train_accuracy = iterate(lr=lr, model=model, batch=data, hyparams=hyparams)
-            print("train acc is " + str(train_accuracy))
-            print("train loss is " + str(train_loss))
-            train_loss_lst.append(train_loss)
-            train_acc_lst.append(train_accuracy)
+            print("train acc is " + str(train_accuracy.item()))
+            print("train loss is " + str(train_loss.item()))
+            train_loss_lst.append(round(train_loss.item(),3))
+            train_acc_lst.append(round(train_accuracy.item(),3))
 
             if i == args.val_per_sents: # per 100 batchs validate model
                 num_valid_batches = len(dev_dataloader)
@@ -295,14 +296,13 @@ def main():
                 dev_accuracy = valid_accracy_sum / num_valid_batches
                 print("valid_accuracy is " + str(dev_accuracy))
                 print("valid_loss is " + str(dev_loss))
-                dev_acc_lst.append(dev_accuracy)
-                dev_loss_lst.append(dev_loss)
+                dev_acc_lst.append(round(dev_accuracy,3))
+                dev_loss_lst.append(round(dev_loss,3))
     # done epochs save the model
-    model_filename = f'train_acc_{round(train_acc_lst[-1].item(), 2)}_model'
+    model_filename = f'train_acc_{round(train_acc_lst[-1], 2)}_model'
     torch.save(model.state_dict(), model_filename)
-    epochs = [i for i in range(hyparams.epochs*batch_size)]
-    export_epochs_train_dev_something_graph(epochs, train_loss_lst, dev_loss_lst, 'loss', 'Model_train_dev_loss_graph')
-    export_epochs_train_dev_something_graph(epochs, train_acc_lst, dev_acc_lst, 'accuracy', 'Model_train_dev_accuracy_graph')
+    export_loss_accuracy_graph(train_loss_lst, train_acc_lst, 'train', 'Model_train_assessment')
+    export_loss_accuracy_graph(dev_loss_lst, dev_acc_lst, 'dev', 'Model_dev_assessment')
 
 
 
