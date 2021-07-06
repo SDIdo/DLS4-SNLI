@@ -1,19 +1,17 @@
 import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
-import torch.nn.functional as F
-from torch import optim
-from torch.autograd import Variable
 import json
-import numpy as np
 from torch.utils.data import DataLoader
 from sys import argv
+import numpy as np
+import matplotlib.pyplot as plt
 
 
 UNKNOWN = "UNKNOWN"
 PAD = "PAD"
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-EMBEDDING_DIM = 300
+EMBEDDING_DIM = 50 # 300
 
 
 class NLIModel(nn.Module):
@@ -151,9 +149,9 @@ def parse_data(file):
     return premises, labels, hypotheses
 
 
-def create_dict():
+def create_dict(glove_path):
     print("Loading Glove Model")
-    f = open(GLOVE_PATH, 'r', encoding="utf8")
+    f = open(glove_path, 'r', encoding="utf8")
     indexed_words = {}
     words_to_vecs = {}
     vecs = []
@@ -219,21 +217,62 @@ def create_dataset(premises, labels, hypotheses, indexed_words, indexed_labels):
 
 class Args():
     def __init__(self, train_path="data/snli_1.0_train.jsonl",
-                 dev_path="data/snli_1.0_test.jsonl",
-                 test_path="data/snli_1.0_dev.jsonl",
-                 gloves_path="data/glove.840B.300d.txt"):
+                 dev_path="data/snli_1.0_dev.jsonl",
+                 test_path="data/snli_1.0_test.jsonl",
+                 gloves_path="data/glove.6B.50d.txt", # data/glove.840B.300d.txt
+                 val_per_sents=100):
         self.train_path = train_path
         self.dev_path = dev_path
         self.test_path = test_path
         self.gloves_path = gloves_path
+        self.val_per_sents = val_per_sents
 
 class HyperParameters():
-    def __init__(self, lr, optimizer='Adam', loss_function='Cross_Entropy', epochs):
+    def __init__(self, lr=0.0002, optimizer='Adam', loss_function='Cross_Entropy', epochs=4, batch_size=32):
         self.lr = lr
         self.optimizer = optimizer
         self.loss_function = loss_function
         self.epochs = epochs
+        self.batch_size = batch_size
 
+def iterate(lr, model, batch, hyparams, is_training=True):
+    batch_size = hyparams.batch_size
+    optimizer = torch.optim.Adam(params=model.parameters(), lr=lr) if hyparams.optimizer == 'Adam' \
+        else torch.optim.Adagrad(model.parameters(), lr=hyparams.lr)
+    # Check the lambda implementation for lr decay
+    criterion = torch.nn.CrossEntropyLoss() if hyparams.loss_function == 'Cross_Entropy' else torch.nn.MSELoss()
+    premise, premise_length, hypothesis, hypothesis_length, label = batch
+    premise = torch.cat(premise).reshape(batch_size, -1)
+    premise = premise.to(DEVICE)
+    hypothesis = torch.cat(hypothesis).reshape(batch_size, -1)
+    hypothesis = hypothesis.to(DEVICE)
+    premise_length = premise_length.int()
+    hypothesis_length = hypothesis_length.int()
+    label = label.to(DEVICE)
+    # zero the parameter gradients
+    outputs = model(premise, premise_length, hypothesis, hypothesis_length)
+    label_pred = outputs.max(1)[1]
+    loss = criterion(outputs, label)
+    accuracy = torch.eq(label, label_pred).float().mean()
+    if is_training:
+        model.zero_grad()
+        loss.backward()
+        optimizer.step()
+    return loss, accuracy
+
+def export_epochs_train_dev_something_graph(epochs, train_something, dev_something, something, fig_name):
+    TRAIN_COLOR = 'green'
+    DEV_COLOR = 'orange'
+    label_1 = f'train_{something}'
+    label_2 = f'dev_{something}'
+    plt.title(fig_name)
+    plt.plot(epochs, train_something, TRAIN_COLOR, label=label_1)
+    plt.plot(epochs, dev_something, DEV_COLOR, label=label_2)
+    plt.xlabel('Epochs')
+    plt.ylabel(f'{something}')
+    plt.legend([label_1, label_2], loc="lower right")
+    plt.savefig(f'{fig_name}.jpg')
+    plt.clf()
 
 def main():
     if len(argv)>1:
@@ -241,65 +280,61 @@ def main():
     else:
         args=Args()
     hyparams = HyperParameters(lr=0.0002, optimizer='Adam', loss_function='Cross_Entropy'
-                               , epochs=4)
-    indexed_words, vecs = create_dict()
+                               ,epochs=4, batch_size=32)
+    batch_size = hyparams.batch_size
+    indexed_words, vecs = create_dict(args.gloves_path)
     indexed_labels = {"-": -1, "entailment": 0, "neutral": 1, "contradiction": 2}
-    train_premises, train_labels, train_hypotheses = parse_data(TRAIN_PATH)
-    dev_premises, dev_labels, dev_hypotheses = parse_data(DEV_PATH)
-    test_premises, test_labels, test_hypotheses = parse_data(TEST_PATH)
+    train_premises, train_labels, train_hypotheses = parse_data(args.train_path)
+    dev_premises, dev_labels, dev_hypotheses = parse_data(args.dev_path)
+    # test_premises, test_labels, test_hypotheses = parse_data(args.test_path)
     train_dataset = create_dataset(train_premises, train_labels, train_hypotheses, indexed_words, indexed_labels)
     dev_dataset = create_dataset(dev_premises, dev_labels, dev_hypotheses, indexed_words, indexed_labels)
-    test_dataset = create_dataset(test_premises, test_labels, test_hypotheses, indexed_words, indexed_labels)
-    train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-    dev_dataloader = DataLoader(dev_dataset, batch_size=32, shuffle=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=True)
+    # test_dataset = create_dataset(test_premises, test_labels, test_hypotheses, indexed_words, indexed_labels)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    dev_dataloader = DataLoader(dev_dataset, batch_size=batch_size, shuffle=True)
+    # test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 
     model = NLIModel(vecs=vecs.to(DEVICE))
 
     model.to(DEVICE)
 
-
+    lr = hyparams.lr
+    train_loss_lst = []
+    train_acc_lst = []
+    dev_loss_lst = []
+    dev_acc_lst = []
     for epoch in range(hyparams.epochs):  # loop over the dataset multiple times
-        optimizer = torch.optim.Adam(params=model.parameters(), lr=hyparams.lr,  # TODO this may fall due to lr_decay
-                                     lr_decay=(lambda: 0.5 if epoch % 2 == 0 else 0)()) if hyparam.optimizer == 'Adam' \
-            else torch.optim.Adagrad(model.parameters(), lr=hyparams.lr,
-                                     lr_decay=(lambda: 0.5 if epoch % 2 == 0 else 0)())
-        # Check the lambda implementation for lr decay
-
-        criterion = torch.nn.CrossEntropyLoss() if hyparams.loss_function == 'Cross_Entropy' else torch.nn.MSELoss()
-
+        lr = lr * 0.5 if epoch % 2 == 0 else lr
         for i, data in enumerate(train_dataloader, 0):
-            premise, premise_length, hypothesis, hypothesis_length, label = data
-            premise = torch.cat(premise).reshape(3, -1)
-            premise = premise.to(DEVICE)
-            hypothesis = torch.cat(hypothesis).reshape(3, -1)
-            hypothesis = hypothesis.to(DEVICE)
-            premise_length = premise_length.int()
-            hypothesis_length = hypothesis_length.int()
-            label = label.to(DEVICE)
+            train_loss, train_accuracy = iterate(lr=lr, model=model, batch=data, hyparams=hyparams)
+            print("train acc is " + str(train_accuracy))
+            print("train loss is " + str(train_loss))
+            train_loss_lst.append(train_loss)
+            train_acc_lst.append(train_accuracy)
 
-            # zero the parameter gradients
-            optimizer.zero_grad()
-            outputs = model(premise, premise_length, hypothesis, hypothesis_length)
-            label_pred = outputs.max(1)[1]
-            loss = criterion(outputs, label)
-            print("loss is " + str(loss))
-            accuracy = torch.eq(label, label_pred).float().mean()
-            print("acc is " + str(accuracy))
-            loss.backward()
-            optimizer.step()
-
-            if epoch == hyparams.epochs:
-                cur_epoch = int(train_loader.epoch)
-                num_valid_batches = len(valid_loader)
+            if i == args.val_per_sents: # per 100 batchs validate model
+                num_valid_batches = len(dev_dataloader)
                 valid_loss_sum = valid_accracy_sum = 0
-                for valid_batch in valid_loader:
-                    valid_loss, valid_accuracy = run_iter(batch=valid_batch, is_training=False,
-                                                          hyperparameters=hyparams)
+                for valid_batch in dev_dataloader:
+                    valid_loss, valid_accuracy = iterate(lr=lr, model=model, batch=valid_batch, hyparams=hyparams, is_training=False)
                     valid_loss_sum += valid_loss.data[0]  # Not sure here...
                     valid_accracy_sum += valid_accuracy.data[0]
-                valid_loss = valid_loss_sum / num_valid_batches
-                valid_accuracy = valid_accracy_sum / num_valid_batches
+                dev_loss = valid_loss_sum / num_valid_batches
+                dev_accuracy = valid_accracy_sum / num_valid_batches
+                print("valid_accuracy is " + str(dev_accuracy))
+                print("valid_loss is " + str(dev_loss))
+                dev_acc_lst.append(dev_accuracy)
+                dev_loss_lst.append(dev_loss)
+    # done epochs save the model
+    model_filename = (f'epochs-{hyparams.epochs:.2f}'
+                      f'-{dev_loss_lst[-1]:.4f}'
+                      f'-{dev_acc_lst[-1]:.4f}.pkl')
+    torch.save(model.state_dict(), model_filename)
+    epochs = [i for i in range(hyparams.epochs)]
+    export_epochs_train_dev_something_graph(epochs, train_loss_lst, dev_loss_lst, 'loss', 'Model_train_dev_loss_graph')
+    export_epochs_train_dev_something_graph(epochs, train_acc_lst, dev_acc_lst, 'accuracy', 'Model_train_dev_accuracy_graph')
+
+
 
 if __name__ == '__main__':
     main()
