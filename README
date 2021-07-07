@@ -13,7 +13,11 @@ Explanation:
 		gloves_path is the path for the gloves vectors (for best performance use glove.840B.300d)
 		validate_per_batches per how many batches would you like to validate the model 
 		
-		NOTE: snli data of proper .txt files are required to be placed locally, same about gloves. 
+		NOTE: snli data of proper .txt files are required to be placed locally, same about gloves.
+		https://nlp.stanford.edu/projects/snli/snli_1.0.zip | https://nlp.stanford.edu/projects/glove/ 
+		If you want to run the program without arguments please organize your data files in a data folder
+		that contains the files: snli_1.0_dev.jsonl, snli_1.0_test.jsonl, snli_1.0_train.jsonl, glove.840B.300d.txt
+		Should look like this: train_model.py pred_model.py data
 
 Relevant Files:
 train_model.py
@@ -44,7 +48,7 @@ Explanation:
 
 Relevant Files:
 test_model.py
-train_model.py (or models.py if had time to better order things)
+train_model.py
 
 Prints: None
 
