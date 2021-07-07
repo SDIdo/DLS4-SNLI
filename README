@@ -43,8 +43,11 @@ Run: python3 test_model.py test_path model_path indexed_words_path
 Explanation:
     
 	test_path is the path of the test dataset file
-	saved_model_path is the path of the trained model file
+	saved_model_path is the path of the trained model file (rename it to 'model' if you want to run without arguments)
 	indexed_words_path is a dictionary containing indexed words (was saved automatically in train stage)
+	If you want to run the program without arguments please organize your data files in a data folder
+	that contains the files: snli_1.0_test.jsonl
+	Should look like this: train_model.py pred_model.py indexed words.json model
 
 
 Relevant Files:
