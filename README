@@ -50,5 +50,6 @@ Prints: None
 
 Outputs: Predictions about input test file.
          The file will be called test.pred
+	 Structure: premise | hypothesis | lable
 
 ###############################################################
